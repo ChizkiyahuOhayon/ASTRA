@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+*.pyo
+data
+*.sha256
+build/
+*.egg-info/
+*.so
+logs/
+runs/
+output/
+wandb/
+*.tfevents.*

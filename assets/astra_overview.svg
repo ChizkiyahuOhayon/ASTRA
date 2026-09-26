@@ -1,0 +1,88 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 470" width="1200" height="470" font-family="Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#3b4252"/>
+    </marker>
+    <style>
+      .box { stroke-width: 1.6; }
+      .title { font-size: 17px; font-weight: 700; fill: #1f2430; }
+      .text { font-size: 14px; fill: #2e3440; }
+      .small { font-size: 12.5px; fill: #4c566a; }
+      .edge { stroke: #3b4252; stroke-width: 1.8; fill: none; marker-end: url(#arrow); }
+      .tag { font-size: 12px; font-weight: 700; fill: #ffffff; }
+    </style>
+  </defs>
+  <rect x="0" y="0" width="1200" height="470" fill="#ffffff"/>
+
+  <!-- inputs -->
+  <rect class="box" rx="12" ry="12" x="20" y="150" width="170" height="170" fill="#eef1f6" stroke="#8a94a6"/>
+  <text class="title" x="105" y="180" text-anchor="middle">Inputs</text>
+  <text class="text" x="105" y="210" text-anchor="middle">Camera images</text>
+  <text class="text" x="105" y="232" text-anchor="middle">LiDAR sweeps</text>
+  <text class="small" x="105" y="262" text-anchor="middle">self-supervised priors:</text>
+  <text class="small" x="105" y="280" text-anchor="middle">depth, object mask,</text>
+  <text class="small" x="105" y="298" text-anchor="middle">optical flow, SfM</text>
+  <text class="small" x="105" y="342" text-anchor="middle">no 3D boxes, no tracks</text>
+
+  <!-- background branch -->
+  <rect class="box" rx="12" ry="12" x="240" y="30" width="190" height="100" fill="#e3f0e3" stroke="#6aa56a"/>
+  <text class="title" x="335" y="62" text-anchor="middle">Background</text>
+  <text class="title" x="335" y="84" text-anchor="middle">Gaussians</text>
+  <text class="small" x="335" y="110" text-anchor="middle">static, from LiDAR + SfM</text>
+
+  <rect class="box" rx="12" ry="12" x="480" y="22" width="330" height="116" fill="#d5ecd5" stroke="#3f8f3f"/>
+  <rect x="480" y="22" width="84" height="24" rx="12" fill="#3f8f3f"/>
+  <text class="tag" x="522" y="39" text-anchor="middle">NEW</text>
+  <text class="title" x="645" y="66" text-anchor="middle">Absolute-gradient densification</text>
+  <text class="text" x="645" y="92" text-anchor="middle">split on Σ‖∇xy‖ instead of ‖Σ∇xy‖</text>
+  <text class="text" x="645" y="115" text-anchor="middle">+ anisotropy regulariser (no needles)</text>
+
+  <!-- object branch -->
+  <rect class="box" rx="12" ry="12" x="240" y="300" width="190" height="100" fill="#fbe7d9" stroke="#c9804a"/>
+  <text class="title" x="335" y="332" text-anchor="middle">Object</text>
+  <text class="title" x="335" y="354" text-anchor="middle">Gaussians</text>
+  <text class="small" x="335" y="380" text-anchor="middle">LiDAR points in object masks</text>
+
+  <rect class="box" rx="12" ry="12" x="480" y="300" width="170" height="100" fill="#f8dcc6" stroke="#c9804a"/>
+  <text class="title" x="565" y="334" text-anchor="middle">Tracklet</text>
+  <text class="title" x="565" y="356" text-anchor="middle">linking</text>
+  <text class="small" x="565" y="382" text-anchor="middle">per-frame clusters → tracks</text>
+
+  <!-- gate -->
+  <polygon points="760,300 830,350 760,400 690,350" fill="#fff4cc" stroke="#c9a227" stroke-width="1.6"/>
+  <text class="text" x="760" y="346" text-anchor="middle" font-weight="700">seen in</text>
+  <text class="text" x="760" y="364" text-anchor="middle" font-weight="700">≥ 8 frames?</text>
+
+  <rect class="box" rx="12" ry="12" x="870" y="236" width="300" height="92" fill="#f3c9a8" stroke="#b5652b"/>
+  <rect x="870" y="236" width="84" height="24" rx="12" fill="#b5652b"/>
+  <text class="tag" x="912" y="253" text-anchor="middle">NEW</text>
+  <text class="title" x="1020" y="280" text-anchor="middle">Shared rigid tracklet motion</text>
+  <text class="text" x="1020" y="306" text-anchor="middle">p(t) = p(t_b) + c_k(t) − c_k(t_b)</text>
+
+  <rect class="box" rx="12" ry="12" x="870" y="372" width="300" height="80" fill="#fbe7d9" stroke="#c9804a"/>
+  <rect x="870" y="372" width="140" height="24" rx="12" fill="#c9804a"/>
+  <text class="tag" x="940" y="389" text-anchor="middle">EVIDENCE ROUTING</text>
+  <text class="title" x="1020" y="418" text-anchor="middle">AD-GS per-Gaussian motion</text>
+  <text class="small" x="1020" y="440" text-anchor="middle">B-spline + Fourier, kept where evidence is thin</text>
+
+  <!-- renderer -->
+  <rect class="box" rx="12" ry="12" x="870" y="40" width="300" height="140" fill="#e4e9f5" stroke="#5a6fa8"/>
+  <text class="title" x="1020" y="72" text-anchor="middle">Rasterise at time t</text>
+  <text class="text" x="1020" y="100" text-anchor="middle">RGB · depth · flow · object mask</text>
+  <text class="small" x="1020" y="128" text-anchor="middle">self-supervised losses (as in AD-GS)</text>
+  <text class="small" x="1020" y="150" text-anchor="middle">single GPU, same schedule as AD-GS</text>
+
+  <!-- edges -->
+  <path class="edge" d="M190,200 C215,200 215,80 238,80"/>
+  <path class="edge" d="M190,270 C215,270 215,350 238,350"/>
+  <path class="edge" d="M430,80 L478,80"/>
+  <path class="edge" d="M810,80 L868,100"/>
+  <path class="edge" d="M430,350 L478,350"/>
+  <path class="edge" d="M650,350 L688,350"/>
+  <path class="edge" d="M800,322 C830,300 845,282 868,282"/>
+  <text class="small" x="818" y="292">yes</text>
+  <path class="edge" d="M800,378 C830,400 845,412 868,412"/>
+  <text class="small" x="818" y="420">no</text>
+  <path class="edge" d="M1020,236 L1020,182"/>
+  <path class="edge" d="M1175,412 C1195,412 1195,110 1172,110"/>
+</svg>
