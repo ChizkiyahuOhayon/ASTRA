@@ -1,0 +1,14 @@
+ASTRA
+Copyright 2026 the ASTRA authors.
+
+This product includes software developed as IDSplat by Zenseact AB (https://github.com/zenseact/idsplat),
+licensed under the Apache License, Version 2.0, which in turn builds on SplatAD, NeuRAD-studio and Nerfstudio.
+
+Modifications by the ASTRA authors (2026):
+  - nerfstudio/models/idsplat.py: trajectory-consistent pose refinement (camopt_interp_eval, camopt_cameras_only),
+    lens-consistent rendering (lens_distortion), progressive Gaussian dropout (gauss_dropout)
+  - nerfstudio/model_components/astra_tivc.py (new): virtual-view consistency
+  - nerfstudio/pipelines/idsplat_pipeline.py: virtual-view consistency loss; static-only scenes without objects
+  - nerfstudio/data/dataparsers/: KITTI-MOT and nuScenes parsers (ported from NeuRAD-studio), AD-GS EVERY_N split,
+    lens metadata for Waymo
+  - scripts/astra/, tools/, docs/ (new)

@@ -1,0 +1,210 @@
+[build-system]
+requires = ["setuptools>=61.0,<70.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "idsplat"
+version = "0.1.0"
+description = "IDSplat: Instance-Decomposed Gaussian Splatting for Autonomous Driving."
+readme = "README.md"
+license = { text="Apache 2.0"}
+requires-python = ">=3.10,<3.12"
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Programming Language :: Python",
+]
+dependencies = [
+    "numpy<2.0",
+    "appdirs>=1.4",
+    "av>=9.2.0,<16.0",
+    "awscli>=1.31.10",
+    "comet_ml>=3.33.8",
+    "cryptography>=38",
+    "tyro>=0.6.6",
+    "gdown>=4.6.0",
+    "ninja>=1.10",
+    "h5py>=2.9.0",
+    "imageio>=2.21.1",
+    'importlib-metadata>=6.0.0; python_version < "3.10"',
+    "ipywidgets>=7.6",
+    "jaxtyping>=0.2.15",
+    "jupyterlab>=3.3.4",
+    "matplotlib>=3.6.0",
+    "mediapy>=1.1.0",
+    "msgpack>=1.0.4",
+    "msgpack_numpy>=0.4.8",
+    "nerfacc==0.5.2",
+    "open3d>=0.16.0",
+    "opencv-python==4.10.0.84",
+    "Pillow>=10.3.0",
+    "plotly>=5.7.0",
+    "protobuf<=3.20.3,!=3.20.0",
+    "pymeshlab>=2022.2.post2; platform_machine != 'arm64' and platform_machine != 'aarch64'",
+    "pyngrok>=5.1.0",
+    "python-socketio>=5.7.1",
+    "pyquaternion>=0.9.9",
+    "rawpy>=0.18.1; platform_machine != 'arm64'",
+    "requests",
+    "rich>=12.5.1",
+    "scikit-image>=0.19.3",
+    "splines==0.3.0",
+    "tensorboard>=2.13.0",
+    # FOR ALL non 50 series GPUs
+    #"torch>=2.6.0",
+    #"torchvision>=0.21.0",
+    # FOR 50 series GPUs (e.g. RTX 5090) - Uncomment this and comment the above
+    "torch>=2.7.1",
+    "torchvision>=0.22.1",
+    "torchmetrics[image]>=1.0.1",
+    "typing_extensions>=4.4.0",
+    "viser<0.2.0",
+    "wandb>=0.13.3",
+    "xatlas",
+    "trimesh>=3.20.2",
+    "timm==0.6.7",
+    "gsplat@git+https://github.com/carlinds/splatad.git",
+    "pytorch-msssim",
+    "pathos",
+    "packaging",
+    "pandaset@git+https://github.com/scaleapi/pandaset-devkit.git#egg=pandaset&subdirectory=python",
+    "fastapi[all]==0.110",
+    "diffusers==0.35.1",
+    "transformers==4.56",
+    "gtsam==4.2",
+    "hdbscan",
+]
+
+[project.optional-dependencies]
+
+# Waymo Open Dataset support (heavy: installs TensorFlow)
+waymo = [
+    "waymo-open-dataset-tf-2-12-0==1.6.5",
+    "dask[dataframe]",
+    "transforms3d",
+]
+
+# SAM2 feature descriptor (only needed when feature_descriptor="sam2")
+sam2 = [
+    "sam2>=1.0.0",
+]
+
+# Development packages
+dev = [
+    "pre-commit==3.3.2",
+    "pytest==7.1.2",
+    "pytest-xdist==2.5.0",
+    "typeguard==2.13.3",
+    "ruff==0.6.2",
+    "sshconf==0.2.5",
+    "pycolmap>=0.3.0", 
+    "opencv-stubs==0.0.7",
+    "torch>=2.6.0",
+]
+
+# Documentation related packages
+docs = [
+    "furo==2022.09.29",
+    # Specifying ipython for https://github.com/ipython/ipython/issues/13845
+    "ipython==8.6.0",
+    "readthedocs-sphinx-search==0.1.2",
+    "myst-nb==0.16.0",
+    "nbconvert==7.2.5",
+    "nbformat==5.9.2",
+    "sphinx==5.2.1",
+    "sphinxemoji==0.2.0",
+    "sphinx-argparse==0.3.1",
+    "sphinx-copybutton==0.5.0",
+    "sphinx-design==0.2.0",
+    "sphinxext-opengraph==0.6.3"
+]
+
+[tool.setuptools.packages.find]
+include = ["nerfstudio*"]
+
+[tool.setuptools.package-data]
+"*" = ["*.cu", "*.json", "py.typed", "setup.bash", "setup.zsh", "*.yaml"]
+
+[tool.uv]
+environments = ["sys_platform == 'linux' and platform_machine == 'x86_64'"]
+override-dependencies = [
+    "tensorflow>=2.12",
+    "numpy>=1.23.5",
+    "pillow>=10.3.0",
+    "pyarrow>=14.0.0",  
+    "openexr>=3.4.5",   
+]
+
+####### For 50 series GPUs (CUDA 12.8, e.g. RTX 5090): uncomment this block and comment out the non-50-series block below #######
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchvision = [{ index = "pytorch-cu128" }]
+
+####### For non 50 series GPUs (CUDA 12.4): uncomment this block and comment out the 50-series block above #######
+# [[tool.uv.index]]
+# name = "pytorch-cu124"
+# url = "https://download.pytorch.org/whl/cu124"
+# explicit = true
+# [tool.uv.sources]
+# torch = [{ index = "pytorch-cu124" }]
+# torchvision = [{ index = "pytorch-cu124" }]
+
+[tool.pytest.ini_options]
+addopts = "-n=4 --typeguard-packages=nerfstudio --disable-warnings"
+testpaths = [
+    "tests",
+]
+
+[tool.pyright]
+include = ["nerfstudio"]
+exclude = ["**/node_modules",
+    "**/__pycache__",
+]
+defineConstant = { DEBUG = true }
+
+reportMissingImports = "warning"
+reportMissingTypeStubs = false
+reportPrivateImportUsage = false
+
+pythonVersion = "3.10"
+pythonPlatform = "Linux"
+
+[tool.ruff]
+line-length = 120
+respect-gitignore = false
+lint.select = [
+    "E",  # pycodestyle errors.
+    "F",  # Pyflakes rules.
+    "I",  # isort formatting.
+    "PLC",  # Pylint convention warnings.
+    "PLE",  # Pylint errors.
+    "PLR",  # Pylint refactor recommendations.
+    "PLW",  # Pylint warnings.
+    "NPY201" # NumPY 2.0 migration https://numpy.org/devdocs/numpy_2_0_migration_guide.html#ruff-plugin
+]
+lint.ignore = [
+    "E501",  # Line too long.
+    "F722",  # Forward annotation false positive from jaxtyping. Should be caught by pyright.
+    "F821",  # Forward annotation false positive from jaxtyping. Should be caught by pyright.
+    "PLR2004",  # Magic value used in comparison.
+    "PLR0915",  # Too many statements.
+    "PLR0913",  # Too many arguments.
+    "PLC0414",  # Import alias does not rename variable. (this is used for exporting names)
+    "PLC1901",  # Use falsey strings.
+    "PLR5501",  # Use `elif` instead of `else if`.
+    "PLR0911",  # Too many return statements.
+    "PLR0912",  # Too many branches.
+    "PLW0603",  # Globa statement updates are discouraged.
+    "PLW2901",  # For loop variable overwritten.
+    "PLR1730",  # Replace if statement with min/max
+    "PLC0206",  # Extracting value from dictionary without calling `.items()`
+]
+
+[tool.ruff.lint.isort]
+combine-as-imports = true
+known-first-party = ["nerfstudio"]
+known-third-party = ["gsplat"]
+split-on-trailing-comma = false
