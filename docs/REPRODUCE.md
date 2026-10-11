@@ -56,20 +56,34 @@ python tools/xcam_table.py $R/xcam idsplat astra
 
 ## Tables 5 and 6: ablations
 
-The cumulative rows of Table 5 are the following methods of `scripts/astra/flags.sh`, trained and evaluated like
-Table 1 (add `eval_xcam.sh` for the last column):
+The rows of Table 5 add one component at a time. Each row is a `--method` of `scripts/astra/flags.sh`, trained and
+evaluated like Table 1 (add `eval_xcam.sh` for the last column):
 
 | Row | how to run |
 |---|---|
 | IDSplat | `--method idsplat` |
 | + pose refinement, raw test poses | the next row's model, evaluated with `--pipeline.model.camopt_interp_eval False` (edit `config.yml`) |
-| + trajectory-consistent pose refinement | `--method idsplat` plus the `POSE` flags |
-| + temporal virtual views | `POSE` + the first three `VVC` flags |
-| + lens + dropout | `--method astra-temporal` |
-| + off-trajectory views (full) | `--method astra` |
+| + trajectory-consistent pose refinement | `--method astra-pose` |
+| + temporal virtual views | `--method astra-temporal` |
+| + lens-consistent rendering | `--method astra-nooff` |
+| + off-trajectory virtual views (ASTRA) | `--method astra` |
 
-Table 6 (sequences 802 and 806) removes one component from `astra-temporal`: `astra-nopose`, `astra-nolens`,
-`astra-nodrop` with the off-trajectory flags removed (`--pipeline.tivc_spatial_prob 0`).
+Table 6 (sequences 802 and 806) removes one component from ASTRA: `astra-nopose`, `astra-nolens`, `astra-nooff`
+and `astra-novvc`.
+
+## Evaluating the released checkpoints
+
+Download an archive from the [GitHub release](https://github.com/ChizkiyahuOhayon/ASTRA/releases/tag/checkpoints-v1),
+check it against `SHA256SUMS`, unpack it into `outputs/` and point its config at your data:
+
+```bash
+sha256sum -c SHA256SUMS --ignore-missing
+tar xf astra-kitti0001-75.tar -C outputs/
+uv run python tools/relocate_run.py outputs/astra-kitti0001-75 --data data/kitti --masks_dir data/masks/kitti
+bash scripts/astra/eval_render.sh --config $(cfg astra-kitti0001-75) --out results/astra-kitti0001-75
+```
+
+The last command reproduces the paper number of that run exactly (25.72 dB PSNR for KITTI 0001, 75% split).
 
 ## From result files to tables
 
@@ -77,6 +91,13 @@ Table 6 (sequences 802 and 806) removes one component from `astra-temporal`: `as
 numbers copied from the AD-GS and IDSplat papers) and writes the LaTeX tables and `PAPER_TABLES.md`. Our own
 result files are in the Drive folder (`results.tar.gz`) if you want to check a number without retraining.
 
-Our result files use the internal run names of the project: `repro` = IDSplat (reproduced), `camopt` = + pose
-refinement, `astra` = + temporal virtual views, `gdl` = + lens + dropout, `stivc` = ASTRA (full); the
-`*.nointerp.json` files are the raw-test-pose evaluations.
+Our result files use the internal run names of the project:
+
+| file prefix | method |
+|---|---|
+| `repro` | IDSplat (reproduced) |
+| `camopt` | + trajectory-consistent pose refinement (`astra-pose`); `*.nointerp.json` = raw test poses |
+| `astra` | + temporal virtual views (`astra-temporal`) |
+| `lens` | + lens-consistent rendering (`astra-nooff`) |
+| `sv` | ASTRA (`astra`) |
+| `svnopose`, `svnolens`, `svnovv` | ASTRA without pose refinement / lens / any virtual views |

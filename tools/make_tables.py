@@ -2,8 +2,8 @@
 
 usage: python3 tools/make_tables.py [results_dir] [paper_dir]
 writes <paper_dir>/tables/*.tex, <paper_dir>/numbers.tex and ../results/PAPER_TABLES.md (next to the paper dir).
-Our method row uses the final configuration ("stivc") wherever all scenes of a benchmark are finished, and the
-pose + temporal-VVC configuration ("astra") otherwise; the table builder prints which one it used.
+Our method row is the final configuration "sv" (pose refinement + lens-consistent rendering + temporal and
+off-trajectory virtual views), with one set of hyperparameters on every dataset.
 """
 import glob
 import json
@@ -75,8 +75,8 @@ def xcam_mean(exp, sids=WAYMO):
 
 
 def ours(waymo=True, pat=None, n=None, lp=None):
-    """final config when complete, else the pose + temporal-VVC config."""
-    for exp in ("stivc", "astra"):
+    """the final configuration (sv)."""
+    for exp in ("sv",):
         m = waymo_mean(exp) if waymo else misc_mean(exp, pat, n, lp)
         if m:
             LOG.append(f"ours[{'waymo' if waymo else pat}] = {exp}")
@@ -110,6 +110,17 @@ def tex_table(rows, ncols, higher, digits, mark=True):
     return body
 
 
+def pair(a, b, d, higher=True):
+    """two cells, the better one in bold."""
+    if a is None or b is None:
+        return f"{fmt(a, d)} & {fmt(b, d)}"
+    ra, rb = round(a, d), round(b, d)
+    better_b = rb > ra if higher else rb < ra
+    better_a = ra > rb if higher else ra < rb
+    A, B = fmt(a, d), fmt(b, d)
+    return f"{'\\textbf{' + A + '}' if better_a else A} & {'\\textbf{' + B + '}' if better_b else B}"
+
+
 NAMES = {"StreetGS*": "StreetGS$^\\dagger$~\\cite{yan2024streetgs}", "4DGF*": "4DGF$^\\dagger$~\\cite{4dgf}",
          "PVG": "PVG~\\cite{chen2026periodic}", "PVG*": "PVG$^\\dagger$~\\cite{chen2026periodic}",
          "EmerNeRF": "EmerNeRF~\\cite{emernerf}", "Grid4D": "Grid4D~\\cite{grid4d}",
@@ -124,7 +135,7 @@ our, our_exp = ours()
 rows = [(NAMES[k], v, False) for k, v in pub["waymo"].items()]
 rows.append(("IDSplat (reproduced)", [rep["psnr"], rep["ssim"], rep["lpips"], rep["dpsnr"]], False))
 if our:
-    rows.append(("\\textbf{ASTRA (ours)}", [our["psnr"], our["ssim"], our["lpips"], our["dpsnr"]], True))
+    rows.append(("\\textbf{\\ours{} (ours)}", [our["psnr"], our["ssim"], our["lpips"], our["dpsnr"]], True))
 body = tex_table(rows, 4, [True, True, False, True], [2, 3, 3, 2])
 open(P / "tables" / "waymo.tex", "w").write("\n".join(body) + "\n")
 NUM.update(WaymoOursPSNR=fmt(our["psnr"], 2), WaymoOursSSIM=fmt(our["ssim"], 3), WaymoOursLPIPS=fmt(our["lpips"], 3),
@@ -154,7 +165,7 @@ for m in methods:
     krows.append((NAMES[m], sum([pub[s][m] for s in ("kitti75", "kitti50", "kitti25")], []), False))
 krows.append(("IDSplat (reproduced)", sum([[other[s][0][k] for k in ("psnr", "ssim", "lpips")] for s in ("kitti75", "kitti50", "kitti25")], []), False))
 if all(other[s][1] for s in ("kitti75", "kitti50", "kitti25")):
-    krows.append(("\\textbf{ASTRA (ours)}", sum([[other[s][1][k] for k in ("psnr", "ssim", "lpips")] for s in ("kitti75", "kitti50", "kitti25")], []), True))
+    krows.append(("\\textbf{\\ours{} (ours)}", sum([[other[s][1][k] for k in ("psnr", "ssim", "lpips")] for s in ("kitti75", "kitti50", "kitti25")], []), True))
 body = tex_table(krows, 9, [True, True, False] * 3, [2, 3, 3] * 3)
 open(P / "tables" / "kitti.tex", "w").write("\n".join(body) + "\n")
 
@@ -163,58 +174,81 @@ for key, fn in (("nuscenes", "nuscenes"), ("pandaset", "pandaset")):
     rep_m, our_m = other[key]
     rws.append(("IDSplat (reproduced)", [rep_m[k] for k in ("psnr", "ssim", "lpips")], False))
     if our_m:
-        rws.append(("\\textbf{ASTRA (ours)}", [our_m[k] for k in ("psnr", "ssim", "lpips")], True))
+        rws.append(("\\textbf{\\ours{} (ours)}", [our_m[k] for k in ("psnr", "ssim", "lpips")], True))
     open(P / "tables" / f"{fn}.tex", "w").write("\n".join(tex_table(rws, 3, [True, True, False], [2, 3, 3])) + "\n")
 
 # ---------------------------------------------------------------- Table: ablation (Waymo, all 8 scenes, cumulative)
-abl = [("IDSplat~\\cite{lindstrom2026idsplat}", "repro", ""), ("+ pose refinement, raw test poses", "camopt", ".nointerp"),
-       ("+ traj.-consistent pose refinement", "camopt", ""), ("+ temporal virtual views", "astra", ""),
-       ("+ lens + dropout", "gdl", ""), ("+ off-trajectory views (full)", "stivc", "")]
+abl = [("IDSplat~\\cite{lindstrom2026idsplat}", "repro", ""), ("+ pose, raw test poses", "camopt", ".nointerp"),
+       ("+ traj.-consistent pose", "camopt", ""), ("+ temporal views", "astra", ""),
+       ("+ lens rendering", "lens", ""), ("+ off-trajectory views", "sv", "")]
 arows = []
 for name, exp, suf in abl:
     m = waymo_mean(exp, suffix=suf)
     x = xcam_mean(exp) if not suf else None
     arows.append((name, [None if m is None else m["psnr"], None if m is None else m["ssim"], None if m is None else m["lpips"],
-                         None if m is None else m["dpsnr"], None if x is None else x["psnr_cov_aff"]], exp == "stivc"))
+                         None if m is None else m["dpsnr"], None if x is None else x["psnr_cov_aff"]], exp == "sv"))
+    if m is None:
+        LOG.append(f"ablation row {exp}{suf}: incomplete")
 lines = []
+# bold the best value of each column (ties at the printed precision are all bold)
+abl_best = []
+for j, (d, hi) in enumerate(zip((2, 3, 3, 2, 2), (True, True, False, True, True))):
+    col = [round(r[1][j], d) for r in arows if r[1][j] is not None]
+    abl_best.append((max(col) if hi else min(col)) if col else None)
 for i, (name, vals, is_ours) in enumerate(arows):
     cells = [fmt(v, d) for v, d in zip(vals, (2, 3, 3, 2, 2))]
-    if is_ours:
-        cells = [f"\\textbf{{{c}}}" for c in cells]
-    lines.append(f"{name} & " + " & ".join(cells) + " \\\\")
+    cells = [f"\\textbf{{{c}}}" if v is not None and round(v, d) == b else c
+             for c, v, d, b in zip(cells, vals, (2, 3, 3, 2, 2), abl_best)]
+    lines.append(f"{'\\rowcolor{oursbg}' if is_ours else ''}{name} & " + " & ".join(cells) + " \\\\")
 open(P / "tables" / "ablation.tex", "w").write("\n".join(lines) + "\n")
 for name, exp, suf in abl:
     m = waymo_mean(exp, suffix=suf)
     if m:
         NUM[f"Abl{exp.capitalize()}{'Raw' if suf else ''}PSNR"] = fmt(m["psnr"], 2)
+        NUM[f"Abl{exp.capitalize()}{'Raw' if suf else ''}DPSNR"] = fmt(m["dpsnr"], 2)
+    x = None if suf else xcam_mean(exp)
+    if x:
+        NUM[f"Abl{exp.capitalize()}Cam"] = fmt(x["psnr_cov_aff"], 2)
 
-# leave-one-out on 802 / 806 (full model without the spatial term)
-loo = [("Full (temporal VVC)", "gdl"), ("w/o pose refinement", "gdlnopose"), ("w/o virtual views", "gdlnotivc"),
-       ("w/o lens-consistent rendering", "gdrop"), ("w/o Gaussian dropout", "lens")]
+# remove one component from the final model, Waymo 802 / 806
+loo = [("\\ours{} (full)", "sv"), ("w/o pose refinement", "svnopose"), ("w/o lens-consistent rendering", "svnolens"),
+       ("w/o off-trajectory views", "lens"), ("w/o all virtual views", "svnovv")]
 ll = []
+loo_vals = []
 for name, exp in loo:
     rs = [waymo_run(exp, s) for s in (802, 806)]
     xs = [xcam(exp, s) for s in (802, 806)]
-    vals = [r["psnr"] if r else None for r in rs] + [nmean([r["psnr"] for r in rs]) if all(rs) else None,
-                                                    nmean([x["psnr_cov_aff"] for x in xs]) if all(xs) else None]
-    ll.append(f"{name} & " + " & ".join(fmt(v, 2) for v in vals) + " \\\\")
+    loo_vals.append((name, exp, rs, xs, [r["psnr"] if r else None for r in rs] + [nmean([r["psnr"] for r in rs]) if all(rs) else None,
+                                                    nmean([x["psnr_cov_aff"] for x in xs]) if all(xs) else None]))
+# bold the best value of each column
+loo_best = [max((round(v[4][j], 2) for v in loo_vals if v[4][j] is not None), default=None) for j in range(4)]
+for name, exp, rs, xs, vals in loo_vals:
+    cells = [f"\\textbf{{{fmt(v, 2)}}}" if v is not None and round(v, 2) == b else fmt(v, 2) for v, b in zip(vals, loo_best)]
+    ll.append(f"{'\\rowcolor{oursbg}' if exp == 'sv' else ''}{name} & " + " & ".join(cells) + " \\\\")
+    if all(rs):
+        NUM[f"Loo{exp.capitalize()}PSNR"] = fmt(vals[2], 2)
+    if all(xs):
+        NUM[f"Loo{exp.capitalize()}Cam"] = fmt(vals[3], 2)
 open(P / "tables" / "loo.tex", "w").write("\n".join(ll) + "\n")
 
 # ---------------------------------------------------------------- Table: held-out camera extrapolation
-xm = [("IDSplat~\\cite{lindstrom2026idsplat}", "repro"), ("+ pose refinement", "camopt"), ("+ temporal virtual views", "astra"),
-      ("+ lens + dropout", "gdl"), ("\\textbf{ASTRA (full)}", "stivc")]
+xm = [("IDSplat~\\cite{lindstrom2026idsplat}", "repro"), ("+ pose refinement", "camopt"), ("+ temporal views", "astra"),
+      ("+ lens rendering", "lens"), ("\\textbf{\\ours{} (full)}", "sv")]
+if not all(xcam("lens", s) for s in WAYMO):
+    xm = [r for r in xm if r[1] != "lens"]
+    LOG.append("xcam table: lens row incomplete, left out")
 xs_avail = [s for s in WAYMO if all(xcam(e, s) for _, e in xm)]
 xl = []
 xvals = []
 for name, exp in xm:
     m = xcam_mean(exp, xs_avail)
-    xvals.append((name, [m["psnr"], m["psnr_cov"], m["psnr_cov_aff"], m["ssim_cov"], m["lpips_cov"]], exp == "stivc"))
+    xvals.append((name, [m["psnr"], m["psnr_cov"], m["psnr_cov_aff"], m["ssim_cov"], m["lpips_cov"]], exp == "sv"))
 open(P / "tables" / "xcam.tex", "w").write("\n".join(tex_table(xvals, 5, [True, True, True, True, False], [2, 2, 2, 3, 3])) + "\n")
 NUM["XcamScenes"] = str(len(xs_avail))
 NUM["XcamOurs"] = fmt(xvals[-1][1][2], 2)
 NUM["XcamRep"] = fmt(xvals[0][1][2], 2)
 NUM["XcamGain"] = fmt(xvals[-1][1][2] - xvals[0][1][2], 2)
-NUM["XcamWins"] = str(sum(xcam("stivc", s)["psnr_cov_aff"] > xcam("repro", s)["psnr_cov_aff"] for s in xs_avail))
+NUM["XcamWins"] = str(sum(xcam("sv", s)["psnr_cov_aff"] > xcam("repro", s)["psnr_cov_aff"] for s in xs_avail))
 NUM["XcamCov"] = fmt(100 * xcam_mean("repro", xs_avail)["cov"], 0)
 NUM["XcamCamoptDrop"] = fmt(abs(xvals[1][1][2] - xvals[0][1][2]), 2)
 NUM["XcamTivcGain"] = fmt(xvals[2][1][2] - xvals[1][1][2], 2)
@@ -224,12 +258,76 @@ ps = []
 for s in WAYMO:
     a, b = waymo_run("repro", s), waymo_run(our_exp, s)
     xa, xb = xcam("repro", s), xcam(our_exp, s)
-    ps.append(f"{s} & {fmt(a['psnr'],2)} & \\textbf{{{fmt(b['psnr'],2)}}} & {fmt(a['dpsnr'],2)} & \\textbf{{{fmt(b['dpsnr'],2)}}} & "
-              f"{fmt(xa['psnr_cov_aff'] if xa else None,2)} & \\textbf{{{fmt(xb['psnr_cov_aff'] if xb else None,2)}}} \\\\")
+    ps.append(f"{s} & {pair(a['psnr'], b['psnr'], 2)} & {pair(a['dpsnr'], b['dpsnr'], 2)} & "
+              f"{pair(xa['psnr_cov_aff'] if xa else None, xb['psnr_cov_aff'] if xb else None, 2)} \\\\")
 open(P / "tables" / "perscene.tex", "w").write("\n".join(ps) + "\n")
 NUM["WaymoWins"] = str(sum(waymo_run(our_exp, s)["psnr"] > waymo_run("repro", s)["psnr"] for s in WAYMO))
 
+# ---------------------------------------------------------------- per-sequence tables for KITTI / nuScenes / PandaSet (appendix)
+def per_seq(pat, lp):
+    a, b = misc_runs("repro", pat), misc_runs(our_exp, pat)
+    return [(k, a[k], b[k]) for k in sorted(a) if k in b]
+
+
+kl = []
+for seq in ("0001", "0002", "0006"):
+    cells = []
+    for split in ("75", "50", "25"):
+        _, a, b = per_seq(f"kitti{seq}-{split}", "lpips_alex")[0]
+        cells.append(pair(a["psnr"], b["psnr"], 2))
+    kl.append(f"{seq} & " + " & ".join(cells) + " \\\\")
+open(P / "tables" / "kitti_perscene.tex", "w").write("\n".join(kl) + "\n")
+wins, total = 0, 0
+for pat, lp, fn, strip in (("nusscene-*", "lpips_vgg", "nus_perscene", "nusscene-"), ("panda*", "lpips_alex", "panda_perscene", "panda")):
+    pl = []
+    for k, a, b in per_seq(pat, lp):
+        total += 1; wins += b["psnr"] > a["psnr"]
+        pl.append(f"{k.replace(strip, '')} & {pair(a['psnr'], b['psnr'], 2)} & {pair(a['ssim'], b['ssim'], 3)} & {pair(a[lp], b[lp], 3, False)} \\\\")
+    open(P / "tables" / f"{fn}.tex", "w").write("\n".join(pl) + "\n")
+for pat in ("kitti*-*",):
+    for k, a, b in per_seq(pat, "lpips_alex"):
+        total += 1; wins += b["psnr"] > a["psnr"]
+NUM["OtherWins"] = str(wins)
+NUM["OtherTotal"] = str(total)
+
+# ---------------------------------------------------------------- extra numbers quoted in the text
+for key, label in (("kitti75", "KITTISeventyFive"), ("kitti50", "KITTIFifty"), ("kitti25", "KITTITwentyFive"), ("nuscenes", "NUS")):
+    if other[key][1]:
+        NUM[f"{label}GainADGS"] = fmt(other[key][1]["psnr"] - pub[key]["AD-GS"][0], 2)
+        NUM[f"{label}RepPSNR"] = fmt(other[key][0]["psnr"], 2)
+NUM["PANDAGainPub"] = fmt(other["pandaset"][1]["psnr"] - pub["pandaset"]["IDSplat"][0], 2)
+NUM["PANDARepPSNR"] = fmt(other["pandaset"][0]["psnr"], 2)
+NUM["WaymoGainLPIPS"] = fmt(rep["lpips"] - our["lpips"], 3)
+NUM["WaymoBestPubPSNR"] = fmt(max(v[0] for v in pub["waymo"].values()), 2)
+NUM["WaymoGainBestPub"] = fmt(our["psnr"] - max(v[0] for v in pub["waymo"].values()), 2)
+fr = [waymo_run("repro", s)["fps"] for s in WAYMO]
+fo = [waymo_run(our_exp, s)["fps"] for s in WAYMO]
+NUM["FPSRep"] = fmt(nmean(fr), 1)
+NUM["FPSOurs"] = fmt(nmean(fo), 1)
+xa = xcam_mean("astra", xs_avail)
+NUM["XcamGainAstra"] = fmt(xvals[-1][1][2] - xa["psnr_cov_aff"], 2)
+NUM["XcamFullRep"] = fmt(xvals[0][1][0], 2)
+NUM["XcamFullOurs"] = fmt(xvals[-1][1][0], 2)
+NUM["FrontRepPSNR"] = fmt(rep["psnr"], 1)
+NUM["XcamDrop"] = fmt(rep["psnr"] - xvals[0][1][2], 0)
+
 # ---------------------------------------------------------------- numbers.tex + PAPER_TABLES.md
+# gap between train and held-out PSNR (fig12), from training curves exported by tools/export_curves.py
+CUR = HERE / "data" / "assets" / "curves.json"
+if CUR.exists():
+    C = json.load(open(CUR))
+    both = [s for s in WAYMO if f"repro-{s}" in C and f"{our_exp}-{s}" in C]
+    if both:
+        gap = lambda k: C[k]["train"] and (float(np.mean([v for _, v in C[k]["train"][-40:]])) - C[k]["test"][-1][1])
+        NUM["GapRep"] = fmt(nmean([gap(f"repro-{s}") for s in both]), 1)
+        NUM["GapOurs"] = fmt(nmean([gap(f"{our_exp}-{s}") for s in both]), 1)
+        NUM["GapSeq"] = str(both[0])
+        NUM["GapN"] = str(len(both))
+for k in ("GapRep", "GapOurs", "GapSeq", "GapN", "AblLensPSNR", "AblLensDPSNR", "AblLensCam", "LooSvnoposePSNR", "LooSvnoposeCam",
+          "LooSvnolensPSNR", "LooSvnolensCam", "LooSvnovvPSNR", "LooSvnovvCam"):
+    if k not in NUM:
+        NUM[k] = "\\textcolor{red}{??}"
+        LOG.append(f"number {k} missing")
 with open(P / "numbers.tex", "w") as fh:
     for k, v in NUM.items():
         fh.write(f"\\newcommand{{\\{k}}}{{{v}}}\n")
@@ -238,12 +336,13 @@ with open(P / "numbers.tex", "w") as fh:
 def md(rows, cols):
     out = ["| method | " + " | ".join(cols) + " |", "|---" * (len(cols) + 1) + "|"]
     for name, vals, _ in rows:
-        clean = name.replace("\\textbf{", "").replace("}", "").split("~\\cite")[0].replace("$^\\dagger$", "*")
+        clean = name.replace("\\ours{}", "ASTRA").replace("\\textbf{", "").replace("}", "").split("~\\cite")[0].replace("$^\\dagger$", "*")
         out.append(f"| {clean} | " + " | ".join(fmt(v, 3 if c in ("SSIM", "LPIPS", "SSIM cov", "LPIPS cov") else 2) for v, c in zip(vals, cols)) + " |")
     return "\n".join(out)
 
 
-with open(HERE.parent / "results" / "PAPER_TABLES.md" if False else HERE / "results" / "PAPER_TABLES.md", "w") as fh:
+(HERE / "results").mkdir(exist_ok=True)
+with open(HERE / "results" / "PAPER_TABLES.md", "w") as fh:
     fh.write("# ASTRA paper tables (generated by tools/make_tables.py)\n\n")
     fh.write("\n".join(f"- {l}" for l in LOG) + "\n\n")
     fh.write("## Waymo (8 scenes, AD-GS split, FRONT camera)\n\n" + md(rows, ["PSNR", "SSIM", "LPIPS", "DPSNR"]) + "\n\n")
@@ -254,8 +353,10 @@ with open(HERE.parent / "results" / "PAPER_TABLES.md" if False else HERE / "resu
             rws.append(("ASTRA (ours)", [other[key][1][k] for k in ("psnr", "ssim", "lpips")], True))
         fh.write(f"## {key}\n\n" + md(rws, ["PSNR", "SSIM", "LPIPS"]) + "\n\n")
     fh.write("## Ablation (Waymo, 8 scenes; last column = held-out camera PSNR, covered pixels, affine)\n\n" +
-             md(arows, ["PSNR", "SSIM", "LPIPS", "DPSNR", "XCam"]) + "\n\n")
+             md([("IDSplat (reproduced)",) + tuple(arows[0][1:])] + arows[1:], ["PSNR", "SSIM", "LPIPS", "DPSNR", "XCam"]) + "\n\n")
+    fh.write("## Removing one component (Waymo 802 / 806; last column = held-out camera PSNR, covered pixels, affine)\n\n" +
+             md([(n, v, e == "sv") for n, e, _, _, v in loo_vals], ["PSNR 802", "PSNR 806", "PSNR mean", "XCam"]) + "\n\n")
     fh.write(f"## Held-out camera extrapolation (Waymo, {len(xs_avail)} scenes, FRONT_LEFT/FRONT_RIGHT)\n\n" +
-             md(xvals, ["PSNR full", "PSNR cov", "PSNR cov+aff", "SSIM cov", "LPIPS cov"]) + "\n")
+             md([("IDSplat (reproduced)",) + tuple(xvals[0][1:])] + xvals[1:], ["PSNR full", "PSNR cov", "PSNR cov+aff", "SSIM cov", "LPIPS cov"]) + "\n")
 print("\n".join(LOG))
 print(json.dumps(NUM, indent=0))

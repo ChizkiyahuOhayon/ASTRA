@@ -12,19 +12,22 @@
   <a href="https://drive.google.com/drive/folders/1ZmVEwQ7Zw_ymfHw06QawHFZSbmk0pUk0">
     <img src="https://img.shields.io/badge/Data-Google%20Drive-34a853?style=for-the-badge&logo=googledrive&logoColor=white">
   </a>
+  <a href="https://github.com/ChizkiyahuOhayon/ASTRA/releases/tag/checkpoints-v1">
+    <img src="https://img.shields.io/badge/Checkpoints-Release-8250df?style=for-the-badge&logo=github&logoColor=white">
+  </a>
   <img src="https://img.shields.io/badge/License-Apache%202.0-orange?style=for-the-badge">
 </p>
 
 <p align="center">
   <img src="docs/assets/teaser.jpg" width="96%"><br>
-  <em>Left: a held-out frame on the recorded trajectory. Right: the same timestamp rendered at a camera that no model
-  saw in training. IDSplat fits the recorded path but falls apart off it; ASTRA keeps the scene solid.</em>
+  <em>Left: a held-out frame on the recorded drive. Right: the same moment seen by a real camera that no model used
+  in training. IDSplat fits the recorded path but breaks up next to it; ASTRA keeps the scene solid.</em>
 </p>
 
 ## 📜 News
 
-🔥 **[2026/10]** Code, benchmark scripts, the held-out-camera benchmark, pseudo-label masks for KITTI / nuScenes /
-PandaSet and all our result files are released.
+🔥 **[2026/10]** Code, the held-out-camera benchmark, pseudo-label masks for KITTI / nuScenes / PandaSet, trained
+checkpoints for KITTI / nuScenes / PandaSet and the result file of every run in the paper are released.
 
 ## ✒️ Contents
 
@@ -43,37 +46,35 @@ PandaSet and all our result files are released.
 
 ## 👀 Overview
 
-Driving-scene reconstructions are trained and evaluated on one trajectory: every fourth frame of the drive is held
-out, and the model is scored there. A held-out frame lies between two training frames about a meter apart, so the
-benchmark rewards memorising the recorded path. A simulator needs the opposite.
+A driving simulator built from a recorded drive must show the scene from places the car never was, such as the
+next lane or a camera turned to the side. Today's benchmarks do not test this. They hold out every fourth frame of
+the drive and score the render there, and a held-out frame lies between two training frames about one meter apart.
 
-We measure the gap without any new data. Waymo records five cameras and the benchmark trains on the front camera
-only, so we render the trained model at the **real front-left and front-right cameras** of the same timestamps.
-IDSplat drops from 34.7 dB on the standard held-out frames to 19.8 dB on these views, even on the pixels that the
-front camera observed and after compensating the exposure.
+We test views off the path with data that already exists. Waymo records five cameras and the benchmark trains on
+the front camera only, so we render each trained model at the **real front-left and front-right cameras** of the
+same moments. IDSplat drops from **34.7 dB** on the standard held-out frames to **19.8 dB** at these cameras, even
+on pixels the front camera saw and after matching the exposure of each camera.
 
-We trace this trajectory overfitting to three sources and remove each one, using only the training images:
+We trace the drop to three causes and remove each one, using only the training images:
 
-| Source | ASTRA component | Flag(s) |
+| Cause | ASTRA component | Flags |
 |---|---|---|
-| Logged poses are slightly wrong; the scene absorbs the error at training frames, and held-out frames keep it | **Trajectory-consistent pose refinement**: learn a correction per training camera and carry it to any timestamp by interpolating the bracketing corrections | `--pipeline.model.camopt_interp_eval True` (+ `camera_optimizer.mode SO3xR3`, `camopt_cameras_only`) |
-| The Waymo pipeline renders a pinhole image and compares it with the raw, distorted image (up to 30 px off in the corners) | **Lens-consistent rendering**: render a padded pinhole feature image and resample it through the calibrated Brown–Conrady model before the decoder | `--pipeline.model.lens_distortion True` |
-| All supervision comes from the recorded path | **Virtual-view consistency**: render virtual cameras between neighbouring frames, half of them yawed (±20°) and shifted sideways (±1 m), and supervise them with the two real neighbours, warped by rendered depth and actor boxes and kept only where the two warps agree | `--pipeline.tivc_*` |
-| | **Progressive Gaussian dropout**: drop each Gaussian with a rate that grows to 0.2, so no stack of primitives can memorise a view | `--pipeline.model.gauss_dropout 0.2` |
+| The logged camera poses are slightly wrong. The scene absorbs the error at training frames; held-out frames keep it. | **(1) Trajectory-consistent pose refinement.** Learn a pose correction for every training image and compute the correction of any other moment by interpolating the two nearest training frames. | `POSE` in [`flags.sh`](scripts/astra/flags.sh) |
+| The common Waymo pipeline renders an ideal pinhole image and compares it with the real, distorted image (up to 30 px off in the corners). | **(2) Lens-consistent rendering.** Render a slightly larger pinhole feature image and resample it through the calibrated lens model before the decoder. | `LENS` |
+| Every training image comes from the recorded path. | **(3) Virtual-view consistency.** Render virtual cameras between two recorded frames and, half of the time, turned (±20°) and shifted sideways (±1 m). Supervise them with the two real neighbours warped into the view, keeping a pixel only where both warps agree. | `VVC` |
 
 <p align="center">
   <img src="docs/assets/pipeline.jpg" width="96%"><br>
   <em>ASTRA keeps the IDSplat scene representation (grey) and changes how it is posed, rendered and supervised (orange).</em>
 </p>
 
-Nothing is annotated, no generative prior or extra network is used, and inference renders exactly the IDSplat
-representation (10.5 vs. 10.2 FPS at 1920×1280).
+No 3D annotations, no generative model and no extra network are used, and the same settings run on all four
+datasets. At test time ASTRA renders the same Gaussians with the same rasteriser as IDSplat.
 
 ## 📊 Results
 
-Every number below comes from the scripts in this repository, one run per scene. Rows marked "reproduced" were
-trained with the official IDSplat code on the same machine; rows without the mark are copied from the AD-GS and
-IDSplat papers. † uses annotated 3D boxes.
+Every ASTRA and "reproduced" number below comes from the scripts in this repository, one run per scene. Rows
+without "reproduced" are copied from the AD-GS and IDSplat papers. † uses annotated 3D boxes. **Bold**: best.
 
 ### Waymo: 8 sequences, front camera, every 4th frame held out
 
@@ -88,39 +89,62 @@ IDSplat papers. † uses annotated 3D boxes.
 | AD-GS | 33.91 | 0.927 | 0.228 | 27.41 |
 | IDSplat | 34.59 | 0.929 | 0.235 | 29.63 |
 | IDSplat (reproduced) | 34.68 | 0.931 | 0.232 | 30.24 |
-| **ASTRA** | **36.31** | **0.948** | **0.224** | **30.70** |
+| **ASTRA** | **36.18** | **0.945** | **0.218** | **30.89** |
 
-Our DPSNR uses ground-truth boxes of actors faster than 1 m/s (IDSplat code); the published rows use the
-class-agnostic StreetGS masks.
+DPSNR is PSNR inside the boxes of actors faster than 1 m/s. Ours uses the ground-truth boxes (IDSplat code, for
+evaluation only); the published rows use the StreetGS dynamic masks.
 
 ### Held-out cameras (new benchmark): Waymo front-left / front-right, never trained on
 
-PSNR on co-visible pixels after a per-image affine colour fit; masks are computed once from the IDSplat depth and
-shared by all methods.
+"Visible" counts only pixels that the front camera also saw; the mask is computed once from the IDSplat depth and
+shared by all methods. "+ colour" matches the exposure of each image with a per-channel gain and offset.
 
-| Method | PSNR (full) ↑ | PSNR (co-visible) ↑ | + affine ↑ | SSIM ↑ | LPIPS ↓ |
+| Method | PSNR (all) ↑ | PSNR (visible) ↑ | + colour ↑ | SSIM ↑ | LPIPS ↓ |
 |---|---|---|---|---|---|
 | IDSplat (reproduced) | 13.98 | 17.48 | 19.76 | 0.662 | 0.217 |
-| **ASTRA** | **14.94** | **18.69** | **20.81** | **0.714** | **0.201** |
+| **ASTRA** | **14.75** | **18.59** | **20.63** | **0.699** | **0.203** |
 
-### KITTI, nuScenes and PandaSet (same hyperparameters)
+ASTRA is better than IDSplat on all 8 sequences.
+
+### KITTI, nuScenes and PandaSet (same settings as Waymo)
 
 | Dataset | Protocol | Metric | AD-GS | IDSplat (reproduced) | **ASTRA** |
 |---|---|---|---|---|---|
-| KITTI | 75% train | PSNR / SSIM / LPIPS-Alex | 29.16 / 0.920 / 0.033 | 27.35 / 0.874 / 0.057 | **29.21** / 0.911 / 0.040 |
-| KITTI | 50% train | PSNR / SSIM / LPIPS-Alex | 28.51 / 0.912 / 0.035 | 25.70 / 0.829 / 0.068 | 28.18 / 0.881 / 0.044 |
-| KITTI | 25% train | PSNR / SSIM / LPIPS-Alex | 24.12 / 0.868 / 0.065 | 23.46 / 0.777 / 0.090 | **25.40** / 0.847 / **0.058** |
-| nuScenes | 6 scenes, 3 cams | PSNR / SSIM / LPIPS-VGG | 31.06 / 0.925 / 0.164 | 31.41 / 0.919 / 0.207 | **32.44** / **0.935** / 0.193 |
-| PandaSet | 10 seqs, 6 cams | PSNR / SSIM / LPIPS-Alex | – | 26.79 / 0.812 / 0.172 | **27.44** / **0.830** / **0.160** |
+| KITTI | 75% train | PSNR / SSIM / LPIPS-Alex | 29.16 / **0.920** / **0.033** | 27.35 / 0.874 / 0.057 | **29.27** / 0.911 / 0.040 |
+| KITTI | 50% train | PSNR / SSIM / LPIPS-Alex | **28.51** / **0.912** / **0.035** | 25.70 / 0.829 / 0.068 | 28.22 / 0.883 / 0.044 |
+| KITTI | 25% train | PSNR / SSIM / LPIPS-Alex | 24.12 / **0.868** / 0.065 | 23.46 / 0.777 / 0.090 | **25.45** / 0.845 / **0.059** |
+| nuScenes | 6 scenes, 3 cams | PSNR / SSIM / LPIPS-VGG | 31.06 / 0.925 / **0.164** | 31.41 / 0.919 / 0.207 | **32.40** / **0.935** / 0.193 |
+| PandaSet | 10 seqs, 6 cams | PSNR / SSIM / LPIPS-Alex | – | 26.79 / 0.812 / 0.172 | **27.39** / **0.829** / **0.160** |
 
-> KITTI, nuScenes and PandaSet rows currently report ASTRA without the off-trajectory virtual views (pose refinement,
-> temporal virtual views); the full-model runs on these datasets are in progress and will replace them.
-
+On PandaSet the published IDSplat result is 26.78 / 0.814 / 0.174 and SplatAD† reaches 26.76 / 0.815 / 0.193.
 Full tables, ablations and per-scene numbers: [`docs/RESULTS.md`](docs/RESULTS.md).
+
+### Ablation (Waymo, 8 sequences)
+
+Each row adds one component to the row above. "Side cams" is PSNR at the held-out front-left / front-right cameras
+(visible pixels, after colour matching). Best value of each column in bold.
+
+| Configuration | PSNR ↑ | SSIM ↑ | LPIPS ↓ | DPSNR ↑ | Side cams ↑ |
+|---|---|---|---|---|---|
+| IDSplat (reproduced) | 34.68 | 0.931 | 0.232 | 30.24 | 19.76 |
+| + trajectory-consistent pose refinement | 36.07 | 0.944 | 0.220 | 30.62 | 19.45 |
+| + temporal virtual views | 36.20 | 0.944 | 0.219 | 30.68 | 19.79 |
+| + lens-consistent rendering | **36.27** | **0.945** | **0.218** | 30.82 | 20.20 |
+| + off-trajectory virtual views (**ASTRA**) | 36.18 | **0.945** | **0.218** | **30.89** | **20.63** |
+
+Pose refinement gives most of the gain on held-out frames. Lens-consistent rendering and off-trajectory virtual views
+add most of their gain at the side cameras and on moving objects (DPSNR). Correcting only the training poses, without
+interpolating the corrections to the test frames, drops PSNR to 31.40 dB. The leave-one-out table is in
+[`docs/RESULTS.md`](docs/RESULTS.md).
 
 <p align="center">
   <img src="docs/assets/qual_waymo.jpg" width="96%"><br>
-  <em>Held-out Waymo frames (full frame + zoom-in) for IDSplat, ASTRA and the ground truth.</em>
+  <em>Held-out Waymo frames (full frame + enlarged crop) for IDSplat, ASTRA and the real image.</em>
+</p>
+
+<p align="center">
+  <img src="docs/assets/qual_xcam.jpg" width="96%"><br>
+  <em>Held-out side cameras on Waymo. Darkened pixels were never seen by the front camera.</em>
 </p>
 
 ## 🛠️ Installation
@@ -145,7 +169,7 @@ uv run python -c "import gsplat, torch; print(torch.cuda.is_available())"
 
 ## 📦 Data
 
-See [`docs/DATA.md`](docs/DATA.md) for the full step-by-step guide. In short, everything lives under one root:
+[`docs/DATA.md`](docs/DATA.md) walks through every step. Everything lives under one root:
 
 ```
 data/
@@ -164,12 +188,13 @@ data/
 | KITTI-MOT sequences 0001 / 0002 / 0006 | [cvlibs.net](https://www.cvlibs.net/datasets/kitti/eval_tracking.php) |
 | nuScenes (6 AD-GS scenes) | [nuscenes.org](https://www.nuscenes.org/nuscenes) |
 | PandaSet (10 IDSplat sequences) | [Hugging Face](https://huggingface.co/datasets/georghess/pandaset) |
-| **Our masks for KITTI / nuScenes / PandaSet** | [Google Drive](https://drive.google.com/drive/folders/1ZmVEwQ7Zw_ymfHw06QawHFZSbmk0pUk0) |
+| **Our masks for KITTI / nuScenes / PandaSet** and **all result files** | [Google Drive](https://drive.google.com/drive/folders/1ZmVEwQ7Zw_ymfHw06QawHFZSbmk0pUk0) |
 
 ## 🚀 Training
 
-All scripts take the method as `--method` (`astra`, `idsplat`, or an ablation such as `astra-nopose`,
-`astra-novvc`, `astra-nolens`, `astra-nodrop`, `astra-temporal`; see `scripts/astra/flags.sh`).
+Every script takes the method as `--method`: `astra` (the paper's method), `idsplat`, or an ablation from
+[`scripts/astra/flags.sh`](scripts/astra/flags.sh) (`astra-pose`, `astra-temporal`, `astra-nooff`,
+`astra-nopose`, `astra-nolens`, `astra-novvc`).
 
 ```bash
 # Waymo, scene ids 800..807 (scripts/arrays/wod_id_to_seq_adgs_split.txt)
@@ -186,8 +211,7 @@ bash scripts/astra/train_nuscenes.sh --scene scene-0230 --data data/nuscenes --m
 bash scripts/astra/train_pandaset.sh --sequence 001 --data data/pandaset --masks_dir data/masks/pandaset
 ```
 
-IDSplat trains one Waymo scene in about 1.5 h on an RTX 4090 when it has the GPU to itself; ASTRA adds one
-half-resolution virtual render every second step after step 6k. KITTI and nuScenes scenes are faster.
+Each run is 30k steps on one GPU. Two Waymo, KITTI or nuScenes runs fit on one 48 GB card at the same time.
 
 ## 📏 Evaluation
 
@@ -200,7 +224,7 @@ bash scripts/astra/eval_waymo.sh --config outputs/astra-802/idsplat-wod/<time>/c
 bash scripts/astra/eval_render.sh --config outputs/astra-kitti0001-75/idsplat/<time>/config.yml \
      --out results/astra-kitti0001-75
 
-# Held-out cameras: run the IDSplat model of a scene first, it defines the shared co-visibility masks
+# Held-out cameras: evaluate the IDSplat model of a scene first, its depth defines the shared visibility masks
 bash scripts/astra/eval_xcam.sh --config outputs/idsplat-802/idsplat-wod/<time>/config.yml \
      --mask_dir results/xcam/masks --out results/xcam/idsplat-802.json
 bash scripts/astra/eval_xcam.sh --config outputs/astra-802/idsplat-wod/<time>/config.yml \
@@ -210,15 +234,16 @@ python tools/xcam_table.py results/xcam idsplat astra
 
 ## 🔁 Reproducing the paper tables
 
-[`docs/REPRODUCE.md`](docs/REPRODUCE.md) lists every run behind every table, as copy-paste loops. The raw result
-files of our runs (`results/*.json`, one per run) are in the Drive folder; `tools/make_tables.py` turns a results
-folder into the paper tables.
+[`docs/REPRODUCE.md`](docs/REPRODUCE.md) lists every run behind every table as copy-paste loops. The result file of
+each of our runs is in the Drive folder (`results.tar.gz`), and `tools/make_tables.py <results_dir> <out_dir>`
+turns a results folder into the paper tables, so you can check any number without retraining.
 
 ## 💾 Checkpoints
 
-Trained ASTRA checkpoints for KITTI, nuScenes and PandaSet (pipeline state only, loadable with
-`ns-eval` / `scripts/astra/eval_render.sh`) will be added to the [Drive folder](https://drive.google.com/drive/folders/1ZmVEwQ7Zw_ymfHw06QawHFZSbmk0pUk0) under
-`checkpoints/` as the final runs finish.
+Trained ASTRA checkpoints for all KITTI, nuScenes and PandaSet runs of the paper are attached to the
+[GitHub release](https://github.com/ChizkiyahuOhayon/ASTRA/releases/tag/checkpoints-v1) (pipeline state only, one archive per dataset, with SHA-256 sums). Unpack into
+`outputs/` and evaluate with `scripts/astra/eval_render.sh`; [`docs/REPRODUCE.md`](docs/REPRODUCE.md#evaluating-the-released-checkpoints)
+shows how to point the configs at your data folder.
 
 Waymo checkpoints are not distributed: a Gaussian-splatting checkpoint is a reconstruction of the Waymo data,
 which the Waymo licence does not allow us to share. Each Waymo scene can be retrained with the command above.
@@ -227,7 +252,7 @@ which the Waymo licence does not allow us to share. Each Waymo scene can be retr
 
 ```
 nerfstudio/                       IDSplat code base (Nerfstudio) with the ASTRA components
-  models/idsplat.py               pose interpolation (_interp_camopt), lens rendering (_lens_grid/_lens_warp), dropout
+  models/idsplat.py               pose interpolation (_interp_camopt), lens rendering (_lens_grid/_lens_warp)
   model_components/astra_tivc.py  virtual-view consistency
   pipelines/idsplat_pipeline.py   loss wiring (--pipeline.tivc_*)
   data/dataparsers/               + KITTI-MOT and nuScenes parsers, AD-GS EVERY_N split
@@ -239,8 +264,8 @@ docs/                             data guide, reproduction guide, full results
 ## 📄 License
 
 Apache 2.0, as the IDSplat code it builds on (see `LICENSE` and `NOTICE`). Datasets keep their own licences; the
-released masks for KITTI (CC BY-NC-SA 3.0), nuScenes (CC BY-NC-SA 4.0) and PandaSet (CC BY 4.0) are derived from
-those datasets and inherit their terms.
+released masks and checkpoints for KITTI (CC BY-NC-SA 3.0), nuScenes (CC BY-NC-SA 4.0) and PandaSet (CC BY 4.0)
+are derived from those datasets and inherit their terms.
 
 ## 📌 Citation
 
