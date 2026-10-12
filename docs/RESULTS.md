@@ -85,3 +85,34 @@ Waymo side cameras on pixels the front camera also saw, after per-image colour m
 | + temporal views | 14.27 | 17.40 | 19.79 | 0.659 | 0.213 |
 | + lens rendering | 14.11 | 17.82 | 20.20 | 0.676 | 0.207 |
 | **ASTRA (full)** | 14.75 | 18.59 | 20.63 | 0.699 | 0.203 |
+
+
+## Off-path tests with real measurements
+
+Rendered depth at the Waymo front-left / front-right cameras against same-moment LiDAR, on points visible from the side
+camera and seen without occlusion by some front training image (`tools/offpath_eval.py --mode side`).
+
+| Seq. | AbsRel IDSplat | AbsRel ASTRA | δ1 IDSplat | δ1 ASTRA |
+|---|---|---|---|---|
+| 800 | 0.418 | **0.302** | **0.921** | 0.911 |
+| 801 | 0.449 | **0.357** | 0.756 | **0.855** |
+| 802 | 0.364 | **0.345** | 0.917 | **0.927** |
+| 803 | 0.336 | **0.107** | 0.894 | **0.924** |
+| 804 | 0.299 | **0.122** | 0.892 | **0.911** |
+| 805 | **0.174** | 0.224 | **0.748** | 0.635 |
+| 806 | 0.410 | **0.385** | 0.595 | **0.645** |
+| 807 | 0.036 | **0.027** | 0.974 | **0.977** |
+| **mean** | 0.311 | **0.233** | 0.837 | **0.848** |
+
+KITTI models trained on 75% of the left-camera frames, rendered at the real right camera at every frame
+(`train_kitti.sh --left_only`, `offpath_eval.py --mode stereo`).
+
+| Seq. | PSNR IDSplat | PSNR ASTRA | SSIM IDSplat | SSIM ASTRA | LPIPS IDSplat | LPIPS ASTRA | AbsRel IDSplat | AbsRel ASTRA |
+|---|---|---|---|---|---|---|---|---|
+| 0001 | 17.11 | **17.66** | 0.526 | **0.601** | 0.277 | **0.232** | 0.068 | **0.057** |
+| 0002 | 18.66 | **20.56** | 0.511 | **0.623** | 0.255 | **0.195** | 0.050 | **0.044** |
+| 0006 | **17.42** | 16.61 | 0.649 | 0.649 | **0.176** | 0.206 | 0.060 | **0.030** |
+| **mean** | 17.73 | **18.28** | 0.562 | **0.624** | 0.236 | **0.211** | 0.059 | **0.044** |
+
+At right-camera moments that were training frames of the left camera (only the 0.54 m step changes), PSNR is 17.75
+(IDSplat) and 18.30 (ASTRA).

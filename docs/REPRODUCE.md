@@ -54,9 +54,27 @@ done; done
 python tools/xcam_table.py $R/xcam idsplat astra
 ```
 
-## Tables 5 and 6: ablations
+## Table 5: off-path tests with real measurements
 
-The rows of Table 5 add one component at a time. Each row is a `--method` of `scripts/astra/flags.sh`, trained and
+Waymo side-camera depth needs the Waymo runs of Table 1. The KITTI right-camera test needs left-camera-only runs.
+
+```bash
+for m in idsplat astra; do for s in 800 801 802 803 804 805 806 807; do
+  bash scripts/astra/eval_offpath.sh --config $(cfg $m-$s) --mode side --out $R/offpath/$m-$s.side.json
+done; done
+for m in idsplat astra; do for q in 0001 0002 0006; do
+  bash scripts/astra/train_kitti.sh --sequence $q --split 75 --data data/kitti --masks_dir data/masks/kitti \
+       --method $m --left_only
+  bash scripts/astra/eval_offpath.sh --config $(cfg $m-kittiL$q-75) --mode stereo --out $R/offpath/$m-kittiL$q-75.stereo.json
+done; done
+```
+
+Our result files are in `results_offpath.tar.gz` on the Drive folder; the per-sequence numbers are in
+[`RESULTS.md`](RESULTS.md#off-path-tests-with-real-measurements).
+
+## Tables 6 and 7: ablations
+
+The rows of Table 6 add one component at a time. Each row is a `--method` of `scripts/astra/flags.sh`, trained and
 evaluated like Table 1 (add `eval_xcam.sh` for the last column):
 
 | Row | how to run |
@@ -68,7 +86,7 @@ evaluated like Table 1 (add `eval_xcam.sh` for the last column):
 | + lens-consistent rendering | `--method astra-nooff` |
 | + off-trajectory virtual views (ASTRA) | `--method astra` |
 
-Table 6 (sequences 802 and 806) removes one component from ASTRA: `astra-nopose`, `astra-nolens`, `astra-nooff`
+Table 7 (sequences 802 and 806) removes one component from ASTRA: `astra-nopose`, `astra-nolens`, `astra-nooff`
 and `astra-novvc`.
 
 ## Evaluating the released checkpoints

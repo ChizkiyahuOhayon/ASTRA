@@ -26,6 +26,10 @@
 
 ## 📜 News
 
+🔥 **[2026/10]** Off-path tests with real measurements: rendered depth at the Waymo side cameras checked against
+LiDAR, and KITTI models trained on the left camera scored at the real right camera. Evaluator, training option and
+result files are released.
+
 🔥 **[2026/10]** Code, the held-out-camera benchmark, pseudo-label masks for KITTI / nuScenes / PandaSet, trained
 checkpoints for KITTI / nuScenes / PandaSet and the result file of every run in the paper are released.
 
@@ -105,6 +109,25 @@ shared by all methods. "+ colour" matches the exposure of each image with a per-
 | **ASTRA** | **14.75** | **18.59** | **20.63** | **0.699** | **0.203** |
 
 ASTRA is better than IDSplat on all 8 sequences.
+
+### Off-path tests with real measurements (no model in the loop)
+
+The visibility mask above comes from IDSplat depth. These two tests need no model-made mask at all.
+
+- **Waymo side cameras, depth vs. LiDAR.** Rendered depth at the front-left / front-right cameras against the LiDAR
+  returns of the same moment, on points that are visible from the side camera and were seen, without occlusion, by
+  some front training image. AbsRel is the mean of |d̂ − d| / d, δ1 the share of points with max(d̂/d, d/d̂) < 1.25.
+- **KITTI right camera, a 0.54 m sideways move.** Train on 75% of the frames of the left camera only and render the
+  real right camera (same orientation, 0.54 m to the side) at every frame. PSNR / SSIM / LPIPS-Alex on the full
+  image, AbsRel against LiDAR.
+
+| Method | Waymo side AbsRel ↓ | Waymo side δ1 ↑ | KITTI right PSNR ↑ | SSIM ↑ | LPIPS ↓ | AbsRel ↓ |
+|---|---|---|---|---|---|---|
+| IDSplat (reproduced) | 0.311 | 0.837 | 17.73 | 0.562 | 0.236 | 0.059 |
+| **ASTRA** | **0.233** | **0.848** | **18.28** | **0.624** | **0.211** | **0.044** |
+
+Means over 8 Waymo sequences and 3 KITTI sequences. ASTRA lowers the side-camera depth error on 7 of the 8 Waymo
+sequences and the KITTI depth error on all 3. Per-sequence numbers: [`docs/RESULTS.md`](docs/RESULTS.md#off-path-tests-with-real-measurements).
 
 ### KITTI, nuScenes and PandaSet (same settings as Waymo)
 
@@ -188,7 +211,7 @@ data/
 | KITTI-MOT sequences 0001 / 0002 / 0006 | [cvlibs.net](https://www.cvlibs.net/datasets/kitti/eval_tracking.php) |
 | nuScenes (6 AD-GS scenes) | [nuscenes.org](https://www.nuscenes.org/nuscenes) |
 | PandaSet (10 IDSplat sequences) | [Hugging Face](https://huggingface.co/datasets/georghess/pandaset) |
-| **Our masks for KITTI / nuScenes / PandaSet** and **all result files** | [Google Drive](https://drive.google.com/drive/folders/1ZmVEwQ7Zw_ymfHw06QawHFZSbmk0pUk0) |
+| **Our masks for KITTI / nuScenes / PandaSet** and **all result files** (`results.tar.gz`, off-path tests in `results_offpath.tar.gz`) | [Google Drive](https://drive.google.com/drive/folders/1ZmVEwQ7Zw_ymfHw06QawHFZSbmk0pUk0) |
 
 ## 🚀 Training
 
@@ -206,6 +229,9 @@ bash scripts/astra/train_kitti.sh --sequence 0001 --split 75 --data data/kitti -
 
 # nuScenes
 bash scripts/astra/train_nuscenes.sh --scene scene-0230 --data data/nuscenes --masks_dir data/masks/nuscenes
+
+# KITTI trained on the left camera only, for the off-path test at the real right camera
+bash scripts/astra/train_kitti.sh --sequence 0001 --split 75 --data data/kitti --masks_dir data/masks/kitti --left_only
 
 # PandaSet (needs the GPU alone)
 bash scripts/astra/train_pandaset.sh --sequence 001 --data data/pandaset --masks_dir data/masks/pandaset
@@ -230,7 +256,16 @@ bash scripts/astra/eval_xcam.sh --config outputs/idsplat-802/idsplat-wod/<time>/
 bash scripts/astra/eval_xcam.sh --config outputs/astra-802/idsplat-wod/<time>/config.yml \
      --mask_dir results/xcam/masks --out results/xcam/astra-802.json
 python tools/xcam_table.py results/xcam idsplat astra
+
+# Off-path tests with real measurements: Waymo side-camera depth vs. LiDAR, KITTI right camera
+bash scripts/astra/eval_offpath.sh --config outputs/astra-802/idsplat-wod/<time>/config.yml --mode side \
+     --out results/offpath/astra-802.side.json
+bash scripts/astra/eval_offpath.sh --config outputs/astra-kittiL0001-75/idsplat/<time>/config.yml --mode stereo \
+     --out results/offpath/astra-kittiL0001-75.stereo.json
 ```
+
+The Waymo side test loads the front, front-left and front-right cameras and LiDAR of the scene again; it needs
+about 20 minutes per run on an RTX 4090.
 
 ## 🔁 Reproducing the paper tables
 
@@ -257,7 +292,8 @@ nerfstudio/                       IDSplat code base (Nerfstudio) with the ASTRA 
   pipelines/idsplat_pipeline.py   loss wiring (--pipeline.tivc_*)
   data/dataparsers/               + KITTI-MOT and nuScenes parsers, AD-GS EVERY_N split
 scripts/astra/                    training / evaluation entry points and the component flags
-tools/                            mask generation, DPSNR GT masks, render dumps, metrics, held-out-camera benchmark
+tools/                            mask generation, DPSNR GT masks, render dumps, metrics, held-out-camera benchmark,
+                                  off-path tests against LiDAR and the KITTI right camera (offpath_eval.py)
 docs/                             data guide, reproduction guide, full results
 ```
 
